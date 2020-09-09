@@ -27,7 +27,7 @@ start:
     ;Código do projeto...
 
 makegrid:
-    ;it waits for input, the value of AH is compared to the SCANCODE of the key released
+    ;int 16h espera por input. o valor de AH é comparado ao SCANCODE da tecla que foi apertada 
     ;https://www.win.tue.nl/~aeb/linux/kbd/scancodes-1.html
     .waitForInput:
         xor ah, ah
@@ -68,10 +68,6 @@ makegrid:
             shr word [playerPosition], 1
             jmp .gridBegin
     .gridBegin:
-       ;if it's in an even line, do space
-       ;mov al, 124
-       ;choose whether to use | or _
-       ;put char in screen
        call putchar
        inc bl
        shl word[tablePosition], 1
@@ -94,6 +90,8 @@ clear:
     ret
 
 enemyMovement:
+    ;movimento do inimigo é feito por operação bitwise, para andar para baixo temos que mover
+    ;o bit setado pela mesma quantidade de colunas que a grid tem, nesse caso é 3.
     cmp word[enemyPosition], 0 
     je notSpawned
     jne spawned
@@ -106,6 +104,7 @@ enemyMovement:
 
 collision:
 
+    ;se o bit setado do playerPosition é igual ao bit setado do enemyPosition, houve colisão
     mov ax, [word playerPosition]
     cmp ax, word[enemyPosition]
     je collided
@@ -120,12 +119,13 @@ collision:
 
 
 putchar:
-    ;this puts the char in the screen.
+    ;se o bit setado do playerPosition é igual ao bit setado do tablePosition, coloque @ na tela
     mov ax, word[playerPosition]
     cmp ax, word[tablePosition]
     je playerEncountered
     jne playerNotEncountered
 
+    ;se player não foi encontrado, faça o mesmo teste para inimigos
     playerNotEncountered:
         mov ax, word[enemyPosition]
         cmp ax, word[tablePosition]
@@ -150,6 +150,7 @@ putchar:
         int 10h
         ret
 
+
 jumpLine:
     mov ah, 0eh
     mov al, 10
@@ -158,6 +159,7 @@ jumpLine:
     int 10h
     ret
 
+;colocando a mensagem na tela.
 end1:
     lodsb
     mov ah, 0xe
