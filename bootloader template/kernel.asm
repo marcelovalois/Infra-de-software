@@ -27,9 +27,26 @@ start:
     ;Código do projeto...
 
 makegrid:
-    ;int 16h espera por input. o valor de AH é comparado ao SCANCODE da tecla que foi apertada 
-    ;https://www.win.tue.nl/~aeb/linux/kbd/scancodes-1.html
+    
     .waitForInput:
+        call clear
+        call enemyMovement
+        ;int 16h com AH = 1 checa no buffer do teclado para ver se alguma tecla foi apertada, se
+        ;o buffer estiver vazio ZF é setado, se não estiver vazio ZF é resetado.
+
+        ;!* essa checagem não reseta o buffer, ou seja ao checar e verificar que uma tecla foi 
+        ;apertada é necessario depois limpar ele.
+
+        ;int 16h com AH = 0 pega o input não extendido e depois limpa o buffer.
+        ;int 16h com AX = 0601h limpa todo o buffer.
+        ;http://www.ctyme.com/intr/int-16.htm <- source
+        mov ah, 1
+        int 16h
+        ;se ZF está setado não houve aperto de teclas, então pule para o desenho da grid.
+        jz .gridBegin
+        ;int 16h com AH = 0 espera por um input do teclado. o valor de AH recebido é comparado ao
+        ;SCANCODE da tecla que foi apertada 
+        ;https://www.win.tue.nl/~aeb/linux/kbd/scancodes-1.html
         xor ah, ah
         int 16h
         cmp ah, 0x11
@@ -42,31 +59,16 @@ makegrid:
         je .dPressed
         jmp .waitForInput
         .wPressed:
-            ;call putchar
-            ;call jumpLine
-            call clear
-            call enemyMovement
             jmp .gridBegin
         .sPressed:
-            ;call putchar
-            ;call jumpLine
-            call clear
-            call enemyMovement
             jmp .gridBegin
         .aPressed:
-            ;call putchar
-            ;call jumpLine
-            call clear
-            call enemyMovement
             shl word [playerPosition], 1
             jmp .gridBegin
         .dPressed:
-            ;call putchar
-            ;call jumpLine
-            call clear
-            call enemyMovement
             shr word [playerPosition], 1
             jmp .gridBegin
+
     .gridBegin:
        call putchar
        inc bl
@@ -81,7 +83,16 @@ makegrid:
        mov bh, 0 ;resetting bh
        mov cl, 1 ; resetting cl
        mov word[tablePosition], 1
+       call delay
        jmp .waitForInput
+
+delay:
+    ;faz o computador esperar o tempo determinado por CXDX, o intervalo de tempo utilizado está em microsegundos
+    mov CX, 7
+    mov DX, 0xA120
+    mov AH, 0x86
+    int 15h
+    ;http://www.ctyme.com/intr/int-15.htm <- source
 
 clear:
     mov ah, 0
@@ -129,7 +140,7 @@ putchar:
     playerNotEncountered:
         mov ax, word[enemyPosition]
         cmp ax, word[tablePosition]
-        mov ah, 0eh
+        mov ah, 0Eh
         je enemyEncountered
         jne enemyNotEncountered
 
@@ -145,14 +156,14 @@ putchar:
 
     playerEncountered:
         call collision
-        mov ah, 0eh
+        mov ah, 0x0E
         mov al, 64
         int 10h
         ret
 
 
 jumpLine:
-    mov ah, 0eh
+    mov ah, 0x0E
     mov al, 10
     int 10h
     mov al, 13
@@ -162,9 +173,9 @@ jumpLine:
 ;colocando a mensagem na tela.
 end1:
     lodsb
-    mov ah, 0xe
+    mov ah, 0xE
     mov bh, 0
-    mov bl, 0xf
+    mov bl, 0xF
     int 10h
 
     cmp al, 0
