@@ -5,6 +5,7 @@ data:
 	playerPosition: dw 0
     tablePosition: dw 0
     enemyPosition: dw 0
+    tempEnemyPosition: dw 0
     endGame: db "Game end", 0
     len equ endGame - $
 	;Dados do projeto...
@@ -13,7 +14,6 @@ start:
     xor ax, ax
     mov ds, ax
     mov es, ax
-    mov cl, 1
     mov bl, 0
     mov bh, 0
     mov word [playerPosition], 0x2000
@@ -53,9 +53,9 @@ makegrid:
         je .wPressed
         cmp ah, 0x1F
         je .sPressed
-        cmp ah, 0x20
-        je .aPressed
         cmp ah, 0x1E
+        je .aPressed
+        cmp ah, 0x20
         je .dPressed
         jmp .waitForInput
         .wPressed:
@@ -63,11 +63,18 @@ makegrid:
         .sPressed:
             jmp .gridBegin
         .aPressed:
-            shl word [playerPosition], 1
-            jmp .gridBegin
-        .dPressed:
+            ;compara se já esta no limite esquerdo.
+            cmp word[playerPosition], 0x1000
+            je .gridBegin
             shr word [playerPosition], 1
             jmp .gridBegin
+        .dPressed:
+            ;compara se já esta no limite direito.
+            cmp word[playerPosition], 0x4000
+            je .gridBegin
+            shl word [playerPosition], 1
+            jmp .gridBegin
+            
 
     .gridBegin:
        call putchar
@@ -80,16 +87,15 @@ makegrid:
        inc bh
        cmp bh, 4
        jle .gridBegin
-       mov bh, 0 ;resetting bh
-       mov cl, 1 ; resetting cl
+       mov bh, 0
        mov word[tablePosition], 1
        call delay
        jmp .waitForInput
 
 delay:
     ;faz o computador esperar o tempo determinado por CXDX, o intervalo de tempo utilizado está em microsegundos
-    mov CX, 7
-    mov DX, 0xA120
+    ;mov CX, 7
+    mov DX, 0x4120
     mov AH, 0x86
     int 15h
     ;http://www.ctyme.com/intr/int-15.htm <- source
@@ -104,22 +110,44 @@ enemyMovement:
     ;movimento do inimigo é feito por operação bitwise, para andar para baixo temos que mover
     ;o bit setado pela mesma quantidade de colunas que a grid tem, nesse caso é 3.
     cmp word[enemyPosition], 0 
-    je notSpawned
-    jne spawned
-    notSpawned:
-        mov word[enemyPosition], 2
+    je .notSpawned
+    jne .spawned
+    .notSpawned:
+        call .modulus
+        ;div coloca o módulo da divisão no registro dl, por isso que antes de dividirmos nós zeramos dx
+        mov word[enemyPosition], dx
         ret
-    spawned:
+    .spawned:
         shl word[enemyPosition], 3
+        mov ax, 0x3F
+        and ax, word[enemyPosition]
+        cmp ax, 0
+        je .addEnemies
+        ret
+        .addEnemies:
+            call .modulus
+            or word[enemyPosition], dx
+            ret
+    .modulus:
+        ;interrupt 1Ah com AH = 0 pega o tempo do sistema pelo número de ticks do clock desde a meia noite, podemos usar isso e dividir por 6
+        ;para gerar um número random de 0 a 6 e usar isso para saber qual tipo de spawn nós queremos.
+        ;http://www.ctyme.com/intr/rb-2271.htm <- source
+        mov AH, 0x00
+        int 1Ah
+        mov ax, dx
+        xor dx, dx
+        mov cx, 6
+        div cx
         ret
 
 collision:
 
     ;se o bit setado do playerPosition é igual ao bit setado do enemyPosition, houve colisão
-    mov ax, [word playerPosition]
-    cmp ax, word[enemyPosition]
-    je collided
-    jne notCollided
+    mov ax, word[playerPosition]
+    and ax, word[enemyPosition]
+    cmp ax, 0
+    je notCollided
+    jne collided
     notCollided:
         ret
     collided:
@@ -139,10 +167,11 @@ putchar:
     ;se player não foi encontrado, faça o mesmo teste para inimigos
     playerNotEncountered:
         mov ax, word[enemyPosition]
-        cmp ax, word[tablePosition]
+        and ax, word[tablePosition]
+        cmp ax, 0
         mov ah, 0Eh
-        je enemyEncountered
-        jne enemyNotEncountered
+        je enemyNotEncountered
+        jne enemyEncountered
 
         enemyEncountered:
         mov al, 118
@@ -181,4 +210,3 @@ end1:
     cmp al, 0
     jne end1
     ret
-
